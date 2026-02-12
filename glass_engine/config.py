@@ -7,7 +7,16 @@ the rest of the codebase never contains magic numbers.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from enum import Enum
 from pathlib import Path
+
+
+class ContextMode(Enum):
+    """Operating context for risk weight adjustment."""
+    INDOOR = "indoor"
+    OUTDOOR = "outdoor"
+    WALKING = "walking"
+    STATIONARY = "stationary"
 
 
 @dataclass
@@ -135,3 +144,71 @@ class GlassConfig:
     COOLDOWN_WARNING: float = 8.0
     COOLDOWN_INFO: float = 10.0
     MAX_ALERTS_PER_FRAME: int = 3
+
+    # ── Risk Scoring (Level 2) ───────────────────────────────────────
+    RISK_CRITICAL: float = 0.7       # risk ≥ this → CRITICAL
+    RISK_WARNING: float = 0.4        # risk ≥ this → WARNING
+    RISK_INFO: float = 0.15          # risk ≥ this → INFO; below → suppress
+    MAX_RISK_RANGE: float = 8.0      # distance beyond which risk = 0
+
+    # ── Context Weights ──────────────────────────────────────────────
+    # Keys: (ContextMode, label_category) → weight multiplier
+    # Categories: "person", "vehicle", "furniture", "animal", "other"
+    CONTEXT_WEIGHTS: dict[tuple[str, str], float] = field(default_factory=lambda: {
+        # INDOOR
+        ("indoor", "person"):    1.0,
+        ("indoor", "vehicle"):   0.5,
+        ("indoor", "furniture"): 1.2,
+        ("indoor", "animal"):    0.8,
+        ("indoor", "other"):     0.8,
+        # OUTDOOR
+        ("outdoor", "person"):    1.2,
+        ("outdoor", "vehicle"):   1.5,
+        ("outdoor", "furniture"): 0.3,
+        ("outdoor", "animal"):    1.2,
+        ("outdoor", "other"):     0.8,
+        # WALKING
+        ("walking", "person"):    1.5,
+        ("walking", "vehicle"):   1.5,
+        ("walking", "furniture"): 0.8,
+        ("walking", "animal"):    1.3,
+        ("walking", "other"):     0.8,
+        # STATIONARY
+        ("stationary", "person"):    0.8,
+        ("stationary", "vehicle"):   0.8,
+        ("stationary", "furniture"): 1.0,
+        ("stationary", "animal"):    0.7,
+        ("stationary", "other"):     0.8,
+    })
+
+    # ── Hazard Memory ────────────────────────────────────────────────
+    HAZARD_MEMORY_FRAMES: int = 10   # frames before demoting priority
+    HAZARD_FORGET_FRAMES: int = 3    # frames absent before resetting
+
+    # ── Label Categories ─────────────────────────────────────────────
+    LABEL_CATEGORIES: dict[str, str] = field(default_factory=lambda: {
+        # Person
+        "person": "person",
+        # Vehicles
+        "car": "vehicle", "bicycle": "vehicle", "motorcycle": "vehicle",
+        "bus": "vehicle", "truck": "vehicle", "train": "vehicle",
+        "boat": "vehicle", "airplane": "vehicle",
+        # Animals
+        "cat": "animal", "dog": "animal", "horse": "animal",
+        "sheep": "animal", "cow": "animal", "elephant": "animal",
+        "bear": "animal", "zebra": "animal", "giraffe": "animal",
+        "bird": "animal",
+        # Furniture
+        "chair": "furniture", "couch": "furniture", "bed": "furniture",
+        "dining table": "furniture", "toilet": "furniture", "bench": "furniture",
+    })
+    DEFAULT_LABEL_CATEGORY: str = "other"
+
+    def get_label_category(self, label: str) -> str:
+        """Return the category for a COCO label."""
+        return self.LABEL_CATEGORIES.get(label, self.DEFAULT_LABEL_CATEGORY)
+
+    def get_context_weight(self, mode: ContextMode, label: str) -> float:
+        """Return the context weight for a mode + label combination."""
+        cat = self.get_label_category(label)
+        return self.CONTEXT_WEIGHTS.get((mode.value, cat), 0.8)

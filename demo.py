@@ -24,7 +24,7 @@ import cv2
 import numpy as np
 
 from glass_engine.sdk import GlassInterfaceSDK
-from glass_engine.config import GlassConfig
+from glass_engine.config import ContextMode, GlassConfig
 from glass_engine.models import Detection, Alert
 
 # ── Colour palette ────────────────────────────────────────────────────
@@ -45,9 +45,18 @@ def draw_detections(frame: np.ndarray, detections: list[Detection]) -> None:
         x2 = int(det.bbox[2] * w)
         y2 = int(det.bbox[3] * h)
 
-        cv2.rectangle(frame, (x1, y1), (x2, y2), DEFAULT_COLOR, 2)
+        text = f"#{det.id} {det.label} {det.distance:.1f}m ({det.direction})"
+        if det.approaching:
+            text += " [!]"
+            cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 0, 255), 3)
+        else:
+             cv2.rectangle(frame, (x1, y1), (x2, y2), DEFAULT_COLOR, 2)
 
-        text = f"{det.label} {det.distance:.1f}m ({det.direction})"
+        # Risk score badge
+        risk_text = f"R:{det.risk_score:.2f}"
+        cv2.putText(frame, risk_text, (x1, y2 + 15),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.4, (200, 200, 200), 1)
+
         (tw, th), _ = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
         cv2.rectangle(frame, (x1, y1 - th - 8), (x1 + tw + 4, y1), DEFAULT_COLOR, -1)
         cv2.putText(frame, text, (x1 + 2, y1 - 4),
@@ -134,7 +143,8 @@ def main() -> None:
 
     sdk = GlassInterfaceSDK()
     print("[GlassInterface] Engine started.")
-    print("  q = quit | c = calibrate distance | r = reset alerts")
+    print("  q = quit | c = calibrate | r = reset alerts | s = scene summary")
+    print("  1 = INDOOR | 2 = OUTDOOR | 3 = WALKING | 4 = STATIONARY")
 
     last_result = None
 
@@ -172,7 +182,22 @@ def main() -> None:
                 calibrate(sdk, last_result.detections, frame.shape[0])
             elif key == ord("r"):
                 sdk.reset_alerts()
-                print("[INFO] Alert cooldowns reset.")
+                print("[INFO] Alert cooldowns + hazard memory reset.")
+            elif key == ord("s"):
+                summary = sdk.get_scene_summary()
+                print(f"[SCENE] {summary}")
+            elif key == ord("1"):
+                sdk.set_context(ContextMode.INDOOR)
+                print("[CONTEXT] Switched to INDOOR mode")
+            elif key == ord("2"):
+                sdk.set_context(ContextMode.OUTDOOR)
+                print("[CONTEXT] Switched to OUTDOOR mode")
+            elif key == ord("3"):
+                sdk.set_context(ContextMode.WALKING)
+                print("[CONTEXT] Switched to WALKING mode")
+            elif key == ord("4"):
+                sdk.set_context(ContextMode.STATIONARY)
+                print("[CONTEXT] Switched to STATIONARY mode")
 
     finally:
         sdk.release()

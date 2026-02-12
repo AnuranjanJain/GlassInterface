@@ -46,7 +46,7 @@ class AlertManager:
                 break
 
             key = (alert.label, alert.direction)
-            cooldown = self._cooldown_for(alert.priority)
+            cooldown = self._cooldown_for(alert.priority, alert.risk_score)
             last_fired = self._cooldown_map.get(key, 0.0)
 
             if (now - last_fired) >= cooldown:
@@ -61,10 +61,18 @@ class AlertManager:
 
     # ── Helpers ──────────────────────────────────────────────────────
 
-    def _cooldown_for(self, priority: str) -> float:
-        """Return the cooldown duration (seconds) for a given priority."""
-        return {
+    def _cooldown_for(self, priority: str, risk_score: float = 0.0) -> float:
+        """Return the cooldown duration (seconds) for a given priority.
+
+        Higher risk scores reduce cooldown (urgent threats re-alert faster).
+        Formula: base_cooldown × (1.0 - risk_score × 0.5)
+        """
+        base = {
             "CRITICAL": self._config.COOLDOWN_CRITICAL,
             "WARNING": self._config.COOLDOWN_WARNING,
             "INFO": self._config.COOLDOWN_INFO,
         }.get(priority, self._config.COOLDOWN_INFO)
+
+        # Scale: risk=0 → full cooldown, risk=1.0 → 50% cooldown
+        scale = max(0.3, 1.0 - risk_score * 0.5)
+        return base * scale

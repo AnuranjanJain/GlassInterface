@@ -25,6 +25,11 @@ class Detection:
     bbox: tuple[float, float, float, float]
     distance: float = 0.0
     direction: str = "CENTER"
+    # Tracking fields
+    id: Optional[int] = None
+    velocity: float = 0.0       # m/s, negative = approaching
+    approaching: bool = False
+    risk_score: float = 0.0     # 0.0–2.0 continuous risk (Level 2)
 
     @property
     def center_x(self) -> float:
@@ -53,6 +58,11 @@ class Detection:
             "bbox": [round(v, 4) for v in self.bbox],
             "distance": round(self.distance, 2),
             "direction": self.direction,
+            # Tracking
+            "id": self.id,
+            "velocity": round(self.velocity, 1),
+            "approaching": self.approaching,
+            "risk_score": round(self.risk_score, 3),
         }
 
 
@@ -74,6 +84,9 @@ class Alert:
     label: str
     distance: float
     direction: str
+    velocity: float = 0.0
+    approaching: bool = False
+    risk_score: float = 0.0
     timestamp: float = field(default_factory=time.time)
 
     # Priority ordering for sorting (lower = more urgent).
@@ -90,6 +103,9 @@ class Alert:
             "label": self.label,
             "distance": round(self.distance, 2),
             "direction": self.direction,
+            "velocity": round(self.velocity, 1),
+            "approaching": self.approaching,
+            "risk_score": round(self.risk_score, 3),
             "timestamp": round(self.timestamp, 3),
         }
 
@@ -107,13 +123,17 @@ class FrameResult:
     detections: list[Detection] = field(default_factory=list)
     alerts: list[Alert] = field(default_factory=list)
     processing_time_ms: float = 0.0
+    scene_summary: str = ""     # on-demand natural-language summary
 
     def to_dict(self) -> dict:
-        return {
+        result = {
             "processing_time_ms": round(self.processing_time_ms, 2),
             "detections": [d.to_dict() for d in self.detections],
             "alerts": [a.to_dict() for a in self.alerts],
         }
+        if self.scene_summary:
+            result["scene_summary"] = self.scene_summary
+        return result
 
     def to_json(self) -> str:
         """Serialise the full result to a JSON string."""
