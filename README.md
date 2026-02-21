@@ -2,90 +2,70 @@
 
 **On-device assistive vision system** — detects objects, estimates distance, and generates safety-critical alerts in real-time.
 
+> [!NOTE] 
+> **Looking for the Python server & SDK?**
+> The server-based Python architecture (`FastAPI`, `uvicorn`, `BoT-SORT`, `Ultralytics`) has been moved to the legacy branch:
+> [👉 View `ai-integration` branch](https://github.com/AnuranjanJain/GlassInterface/tree/ai-integration)
+
+This `main` branch now contains the **Fully Native Android** implementation (v2.0) that runs on-device using TensorFlow Lite, eliminating the need for a separate PC or Wi-Fi network.
+
 ## Architecture
 
 ```
-Frame → ObjectDetector (YOLOv8n) → DistanceEstimator → ReasoningEngine → AlertManager → JSON
+CameraX / ESP32-CAM → TFLite (YOLOv8s int8) → Native DistanceEstimator → RiskScorer → Overlay & TTS
 ```
 
-## Quick Start
+## Features
+
+- **On-Device Inference**: Uses a quantized YOLOv8s `.tflite` model executed completely locally on the Android device via CPU/NNAPI processors.
+- **Embedded Assistive AI**: Native Kotlin ports of the Risk Scoring and Bounding Box scaling logic.
+- **Dual Camera Ingest**: Use the phone's built-in camera via `CameraX` or toggle to intercept an external `MJPEG` HTTP stream from a wearable ESP32-CAM device.
+- **Adaptive Alerts**: Dynamically tracks bounding boxes and announces context-aware navigation hints via Text-To-Speech (TTS).
+
+## Installation & Build
+
+### Option 1: Install the Pre-compiled APK
+1. Download a release `.apk` (or build a debug one).
+2. Transfer it to your Android device.
+3. Install via a File Manager (requires "Install from unknown sources").
+
+### Option 2: Compile with Android Studio / Gradle
+Ensure you have the Android SDK installed with `cmdline-tools` or Android Studio.
 
 ```bash
-# Install dependencies
-pip install -r requirements.txt
+# Clone the repository
+git clone https://github.com/AnuranjanJain/GlassInterface.git
+cd GlassInterface
 
-# Run tests (no GPU needed)
-pytest tests/ -v
+# Build the Android APK using Gradle
+./gradlew assembleDebug
 
-# Live webcam demo
-python demo.py
-
-# Start API server
-uvicorn server:app --host 0.0.0.0 --port 8000
+# The built APK will be located at:
+# app/build/outputs/apk/debug/app-debug.apk
 ```
 
-## Usage (Python)
+## ESP32-CAM Usage
 
-```python
-from glass_engine import GlassInterfaceSDK
-import cv2
+GlassInterface v2 can detach from the phone camera and act as a wearable headset processor:
 
-sdk = GlassInterfaceSDK()
-frame = cv2.imread("test.jpg")
-result = sdk.process_frame(frame)
-
-print(result.to_json())
-# {
-#   "processing_time_ms": 38.2,
-#   "detections": [...],
-#   "alerts": [{"priority": "WARNING", "message": "Person ahead, about 2 metres", ...}]
-# }
-
-sdk.release()
-```
-
-## Configuration
-
-Override any threshold via `GlassConfig`:
-
-```python
-from glass_engine import GlassInterfaceSDK, GlassConfig
-
-config = GlassConfig(
-    CONFIDENCE_THRESHOLD=0.60,
-    CRITICAL_DISTANCE=2.0,
-    COOLDOWN_CRITICAL=5.0,
-)
-sdk = GlassInterfaceSDK(config=config)
-```
-
-## Reasoning Rules
-
-| # | Rule | Priority | Condition |
-|---|------|----------|-----------|
-| 1 | Collision imminent | **CRITICAL** | Safety label + <1.5m + CENTER |
-| 2 | Close approach | **WARNING** | Safety label + <3.0m |
-| 3 | Nearby object | INFO | Any label + <2.0m |
-| 4 | Suppress | — | Everything else |
-
-**Safety labels:** person, car, bicycle, motorcycle, bus, truck, stairs
+1. Flash an ESP32-CAM with a standard `CameraWebServer` or MJPEG sketch.
+2. Connect the phone to the ESP32's Wi-Fi network (or put them both on the same local network).
+3. Open the **GlassInterface** app.
+4. Tap the Gear icon to enter **Settings**.
+5. Enable the **Use External Wi-Fi Camera** toggle.
+6. Enter the stream URL (e.g., `http://192.168.4.1:81/stream`).
+7. The app overlay will instantly switch to processing the external hardware's POV camera.
 
 ## Project Structure
 
+```text
+app/                    # Core UI, MainViewModel, Jetpack Compose UI
+core/                   
+├── ai-bridge/          # LocalAIEngine.kt, TFLite Interpreter, RiskScorer.kt
+├── camera/             # CameraX FrameProvider, MjpegInputStream.kt
+├── common/             # AlertConfig, BoundingBox, and SceneMode Data Models
+├── overlay/            # Canvas UI Drawing logic
+└── tts/                # Android TextToSpeech engine wrappers
+feature/
+└── settings/           # Configuration UI, DataStore repository
 ```
-glass_engine/
-├── sdk.py              # Public facade
-├── config.py           # All thresholds
-├── models.py           # Detection, Alert, FrameResult
-├── detection/detector.py   # YOLOv8n wrapper
-├── distance/estimator.py   # BBox distance heuristic
-├── reasoning/engine.py     # Priority rules
-└── alert/manager.py        # Cooldown & dedup
-```
-
-## Future Roadmap
-
-1. Scene context accumulator across frames
-2. On-device SLM integration (Gemma 2B / Phi-3)
-3. LLM-based intent parsing for voice commands
-4. User preference learning
