@@ -37,6 +37,11 @@ dependencies {
     implementation(libs.okhttp)
     implementation(libs.gson)
 
+    // TFLite
+    implementation(libs.tensorflow.lite)
+    implementation(libs.tensorflow.lite.support)
+    implementation(libs.tensorflow.lite.metadata)
+
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
 }

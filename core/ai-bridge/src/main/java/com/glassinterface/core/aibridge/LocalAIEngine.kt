@@ -63,40 +63,34 @@ class LocalAIEngine(private val context: Context) : AIEngine {
             return DetectionResult(emptyList())
         }
 
-        // 1. Preprocess
+        // 1. Preprocess using TensorImage
+        val inputTensor = interpreter?.getInputTensor(0)
+        val inputShape = inputTensor?.shape() ?: intArrayOf(1, INPUT_SIZE, INPUT_SIZE, 3)
+        val inputDataType = inputTensor?.dataType() ?: DataType.FLOAT32
+
         val imageProcessor = ImageProcessor.Builder()
             .add(ResizeOp(INPUT_SIZE, INPUT_SIZE, ResizeOp.ResizeMethod.BILINEAR))
             .add(NormalizeOp(0f, 255f))
             .build()
-        var tensorImage = TensorImage(DataType.FLOAT32)
+        
+        var tensorImage = TensorImage(inputDataType)
         tensorImage.load(frame)
         tensorImage = imageProcessor.process(tensorImage)
 
-        // YOLOv8 int8 TFLite requires INT8 input.
-        val inputBuffer = ByteBuffer.allocateDirect(1 * INPUT_SIZE * INPUT_SIZE * 3)
-        inputBuffer.order(ByteOrder.nativeOrder())
-        val floatArr = tensorImage.tensorBuffer.floatArray
-        for (f in floatArr) {
-            // Quantize to INT8 [-128, 127] based on TFLite mapping
-            var intVal = (f * 255f - 128f).toInt()
-            if (intVal < -128) intVal = -128
-            if (intVal > 127) intVal = 127
-            inputBuffer.put(intVal.toByte())
-        }
-        inputBuffer.rewind()
+        // 2. Output Buffer Allocation
+        val outputTensor = interpreter?.getOutputTensor(0)
+        val outputShape = outputTensor?.shape() ?: intArrayOf(1, 84, 8400)
+        val outputDataType = outputTensor?.dataType() ?: DataType.FLOAT32
 
-        // 2. Inference
-        // Output shape for YOLOv8s is typically [1, 84, 8400]
-        val outputBuffer = TensorBuffer.createFixedSize(intArrayOf(1, 84, 8400), DataType.FLOAT32)
+        val outputBuffer = TensorBuffer.createFixedSize(outputShape, outputDataType)
 
+        // 3. Inference
         try {
-            interpreter?.run(inputBuffer, outputBuffer.buffer)
+            interpreter?.run(tensorImage.buffer, outputBuffer.buffer)
         } catch (e: Exception) {
-            Log.e(TAG, "Inference failed", e)
+            Log.e(TAG, "Inference failed: ${e.message}", e)
             return DetectionResult(emptyList())
         }
-
-        // 3. Postprocess
         val rawBoxes = extractBoxes(outputBuffer.floatArray, frame.width, frame.height)
 
         // 4. Enrich & Score

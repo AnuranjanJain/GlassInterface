@@ -120,7 +120,8 @@ class RiskScorer(
             message = msg,
             label = det.label,
             distance = det.distance,
-            direction = det.direction
+            direction = det.direction,
+            riskScore = risk
         )
     }
 

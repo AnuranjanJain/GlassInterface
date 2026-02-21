@@ -58,7 +58,8 @@ data class Alert(
     val message: String,
     val label: String = "",
     val distance: Float = 0f,
-    val direction: String = "CENTER"
+    val direction: String = "CENTER",
+    val riskScore: Float = 0f
 )
 
 /**
