@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.1.1] - 2026-03-30
+
+### Fixed
+- **Build-from-source broken for new cloners**: `.gitignore` had a blanket `*.tflite` rule that excluded the essential `app/src/main/assets/yolov8s.tflite` model from version control. Anyone cloning the repo would get a build with no ML model, crashing `LocalAIEngine` at runtime.
+- Added `.gitignore` negation rule to force-track the Android asset model while still ignoring other exported TFLite files.
+
+---
+
 ## [2.1.0] - 2026-02-21
 
 ### Fixed
