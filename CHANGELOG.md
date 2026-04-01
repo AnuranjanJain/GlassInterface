@@ -2,7 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
-## [2.1.1] - 2026-03-30
+## [0.5.0] - 2026-04-01
+
+### Added
+- **ESP32 WebSocket Support (`CameraFrameProvider.kt`)**: Implemented OkHttp WebSocket client to natively receive binary JPEGs from custom ESP32 robot sketches. Dual-supports standard HTTP MJPEG and WebSockets dynamically.
+- `android.build.pageAlign=true` added to gradle properties to support Android 15's 16KB page size requirement for native libraries.
+
+### Fixed
+- Fixed bug where `MainScreen` UI was strictly bound to `CameraX` local camera, obscuring the ESP32 external stream from the user.
+- Fixed `MjpegInputStream` relying on single-pass EOF sequence checking.
+
+---
+
+## [0.4.1] - 2026-03-30
 
 ### Fixed
 - **Build-from-source broken for new cloners**: `.gitignore` had a blanket `*.tflite` rule that excluded the essential `app/src/main/assets/yolov8s.tflite` model from version control. Anyone cloning the repo would get a build with no ML model, crashing `LocalAIEngine` at runtime.
@@ -10,7 +22,7 @@ All notable changes to this project will be documented in this file.
 
 ---
 
-## [2.1.0] - 2026-02-21
+## [0.4.0] - 2026-02-21
 
 ### Fixed
 - **Bounding Box Rendering**: TFLite model outputs normalized `[0..1]` coordinates, but `extractBoxes()` was dividing by 640 — making every box sub-pixel and invisible. Now auto-detects coordinate system.
@@ -28,7 +40,7 @@ All notable changes to this project will be documented in this file.
 
 ---
 
-## [2.0.0] - 2026-02-21
+## [0.3.0] - 2026-02-21
 
 ### Added
 - **Native Android AI Engine (`LocalAIEngine.kt`)**: The application now runs AI inference entirely on-device, removing the need for a separate Python PC server.
