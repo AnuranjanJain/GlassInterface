@@ -5,10 +5,17 @@ import androidx.annotation.OptIn
 import androidx.camera.core.ExperimentalGetImage
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageProxy
-import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.channels.Channel.Factory.CONFLATED
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.receiveAsFlow
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.WebSocket
+import okhttp3.WebSocketListener
+import okio.ByteString
+
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -29,13 +36,17 @@ import javax.inject.Singleton
 @Singleton
 class CameraFrameProvider @Inject constructor() {
 
-    private val frameChannel = Channel<Bitmap>(CONFLATED)
+    private val _frames = MutableSharedFlow<Bitmap>(
+        replay = 1,
+        extraBufferCapacity = 1,
+        onBufferOverflow = BufferOverflow.DROP_OLDEST
+    )
 
     /**
      * Flow of the latest camera frames.
-     * Collectors will only see the most recent frame; stale frames are dropped.
+     * Collectors will only see the most recent frame.
      */
-    val frames: Flow<Bitmap> = frameChannel.receiveAsFlow()
+    val frames: Flow<Bitmap> = _frames.asSharedFlow()
 
     /**
      * Returns an [ImageAnalysis.Analyzer] that converts each frame to a [Bitmap]
@@ -52,7 +63,7 @@ class CameraFrameProvider @Inject constructor() {
         override fun analyze(imageProxy: ImageProxy) {
             try {
                 val bitmap = ImageProxyToBitmapConverter.convert(imageProxy)
-                frameChannel.trySend(bitmap)
+                _frames.tryEmit(bitmap)
             } catch (e: Exception) {
                 // Log but don't crash on rare conversion failures
                 android.util.Log.w("CameraFrameProvider", "Frame conversion failed", e)
@@ -62,15 +73,90 @@ class CameraFrameProvider @Inject constructor() {
         }
     }
 
-    // ── ESP32-CAM MJPEG Stream ──────────────────────────────────────
+    // ── ESP32-CAM MJPEG / WebSocket Stream ──────────────────────────
 
     private var mjpegJob: Job? = null
+    private var webSocket: WebSocket? = null
+    private val okHttpClient = OkHttpClient.Builder()
+        .readTimeout(0, java.util.concurrent.TimeUnit.MILLISECONDS)
+        .build()
 
     fun startExternalStream(urlStr: String, scope: CoroutineScope) {
+        android.util.Log.d("CameraFrameProvider", "Requested to start stream with URL: $urlStr")
         stopExternalStream()
+
+        var finalUrlStr = urlStr.trim()
+        val isWebSocket = finalUrlStr.startsWith("ws://", ignoreCase = true) || finalUrlStr.startsWith("wss://", ignoreCase = true)
+
+        if (!isWebSocket) {
+            if (!finalUrlStr.startsWith("http://", ignoreCase = true) && !finalUrlStr.startsWith("https://", ignoreCase = true)) {
+                finalUrlStr = "http://$finalUrlStr"
+            }
+            startHttpMjpegStream(finalUrlStr, scope)
+        } else {
+            startWebSocketStream(finalUrlStr)
+        }
+    }
+
+    private fun startWebSocketStream(urlStr: String) {
+        android.util.Log.d("CameraFrameProvider", "Attempting WebSocket connection to URL: $urlStr")
+        val request = Request.Builder().url(urlStr).build()
+        
+        webSocket = okHttpClient.newWebSocket(request, object : WebSocketListener() {
+            var framesRead = 0
+            
+            override fun onOpen(webSocket: WebSocket, response: okhttp3.Response) {
+                android.util.Log.d("CameraFrameProvider", "WebSocket connection opened!")
+            }
+
+            override fun onMessage(webSocket: WebSocket, bytes: ByteString) {
+                try {
+                    android.util.Log.d("CameraFrameProvider", "Received binary frame: ${bytes.size} bytes")
+                    val byteArray = bytes.toByteArray()
+                    val bitmap = android.graphics.BitmapFactory.decodeByteArray(byteArray, 0, byteArray.size)
+                    if (bitmap != null) {
+                        framesRead++
+                        _frames.tryEmit(bitmap)
+                    } else {
+                        android.util.Log.w("CameraFrameProvider", "Failed to decode binary WebSocket frame")
+                    }
+                } catch (e: Exception) {
+                    android.util.Log.e("CameraFrameProvider", "Error processing WebSocket frame", e)
+                }
+            }
+
+            override fun onMessage(webSocket: WebSocket, text: String) {
+                try {
+                    android.util.Log.d("CameraFrameProvider", "Received text frame: ${text.length} chars")
+                    // If ESP32 sends JPEG as Base64 text string by mistake, decode it:
+                    val byteArray = android.util.Base64.decode(text, android.util.Base64.DEFAULT)
+                    val bitmap = android.graphics.BitmapFactory.decodeByteArray(byteArray, 0, byteArray.size)
+                    if (bitmap != null) {
+                        framesRead++
+                        _frames.tryEmit(bitmap)
+                    } else {
+                        android.util.Log.w("CameraFrameProvider", "Failed to decode text WebSocket frame")
+                    }
+                } catch (e: Exception) {
+                    android.util.Log.e("CameraFrameProvider", "Error processing Text WebSocket frame", e)
+                }
+            }
+
+            override fun onFailure(webSocket: WebSocket, t: Throwable, response: okhttp3.Response?) {
+                android.util.Log.e("CameraFrameProvider", "WebSocket failure", t)
+            }
+
+            override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
+                android.util.Log.d("CameraFrameProvider", "WebSocket closed: $reason")
+            }
+        })
+    }
+
+    private fun startHttpMjpegStream(finalUrlStr: String, scope: CoroutineScope) {
+        android.util.Log.d("CameraFrameProvider", "Attempting HTTP connection to URL: $finalUrlStr")
         mjpegJob = scope.launch(Dispatchers.IO) {
             try {
-                val url = URL(urlStr)
+                val url = URL(finalUrlStr)
                 val connection = url.openConnection() as HttpURLConnection
                 connection.requestMethod = "GET"
                 connection.connectTimeout = 5000
@@ -78,18 +164,32 @@ class CameraFrameProvider @Inject constructor() {
                 connection.connect()
 
                 if (connection.responseCode == 200) {
+                    android.util.Log.d("CameraFrameProvider", "Connection successful! Starting MJPEG read loop.")
                     val mjpegStream = MjpegInputStream(connection.inputStream)
+                    var framesRead = 0
                     while (isActive) {
-                        val bitmap = mjpegStream.readMjpegFrame()
-                        if (bitmap != null) {
-                            frameChannel.trySend(bitmap)
+                        try {
+                            val bitmap = mjpegStream.readMjpegFrame()
+                            if (bitmap != null) {
+                                framesRead++
+                                if (framesRead % 30 == 0) {
+                                    android.util.Log.d("CameraFrameProvider", "Successfully read $framesRead frames.")
+                                }
+                                _frames.tryEmit(bitmap)
+                            } else {
+                                android.util.Log.w("CameraFrameProvider", "readMjpegFrame returned null bitmap")
+                            }
+                        } catch (e: Exception) {
+                            android.util.Log.e("CameraFrameProvider", "Error reading frame in loop", e)
+                            break
                         }
                     }
+                    android.util.Log.d("CameraFrameProvider", "Stream loop exited. isActive: $isActive")
                 } else {
                     android.util.Log.e("CameraFrameProvider", "HTTP Error: ${connection.responseCode}")
                 }
             } catch (e: Exception) {
-                android.util.Log.e("CameraFrameProvider", "MJPEG Stream error", e)
+                android.util.Log.e("CameraFrameProvider", "MJPEG Stream connection error", e)
             }
         }
     }
@@ -97,5 +197,7 @@ class CameraFrameProvider @Inject constructor() {
     fun stopExternalStream() {
         mjpegJob?.cancel()
         mjpegJob = null
+        webSocket?.cancel()
+        webSocket = null
     }
 }

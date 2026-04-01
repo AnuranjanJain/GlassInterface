@@ -6,6 +6,7 @@ import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -33,6 +34,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -58,57 +61,79 @@ fun MainScreen(
 
     Box(modifier = Modifier.fillMaxSize()) {
         // Layer 1: Camera Preview
-        AndroidView(
-            modifier = Modifier.fillMaxSize(),
-            factory = { ctx ->
-                val previewView = PreviewView(ctx).apply {
-                    layoutParams = ViewGroup.LayoutParams(
-                        ViewGroup.LayoutParams.MATCH_PARENT,
-                        ViewGroup.LayoutParams.MATCH_PARENT
-                    )
-                    implementationMode = PreviewView.ImplementationMode.PERFORMANCE
-                    scaleType = PreviewView.ScaleType.FILL_CENTER
+        if (uiState.alertConfig.useExternalCamera) {
+            val currentBitmap by frameProvider.frames.collectAsStateWithLifecycle(initialValue = null)
+            
+            if (currentBitmap != null) {
+                Image(
+                    bitmap = currentBitmap!!.asImageBitmap(),
+                    contentDescription = "ESP32 CAM Stream",
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                )
+            } else {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color.Black),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text("Connecting to ESP32 CAM...", color = Color.White)
                 }
-
-                val cameraProviderFuture = ProcessCameraProvider.getInstance(ctx)
-                cameraProviderFuture.addListener({
-                    val cameraProvider = cameraProviderFuture.get()
-
-                    val preview = Preview.Builder()
-                        .build()
-                        .also { it.surfaceProvider = previewView.surfaceProvider }
-
-                    @Suppress("DEPRECATION")
-                    val imageAnalysis = ImageAnalysis.Builder()
-                        .setTargetResolution(android.util.Size(640, 480))
-                        .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
-                        .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_YUV_420_888)
-                        .build()
-                        .also {
-                            it.setAnalyzer(
-                                Executors.newSingleThreadExecutor(),
-                                frameProvider.createAnalyzer()
-                            )
-                        }
-
-                    val cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
-
-                    try {
-                        cameraProvider.unbindAll()
-                        cameraProvider.bindToLifecycle(
-                            lifecycleOwner,
-                            cameraSelector,
-                            preview,
-                            imageAnalysis
-                        )
-                    } catch (e: Exception) {
-                        android.util.Log.e("MainScreen", "Camera binding failed", e)
-                    }
-                }, ContextCompat.getMainExecutor(ctx))
-
-                previewView
             }
-        )
+        } else {
+            AndroidView(
+                modifier = Modifier.fillMaxSize(),
+                factory = { ctx ->
+                    val previewView = PreviewView(ctx).apply {
+                        layoutParams = ViewGroup.LayoutParams(
+                            ViewGroup.LayoutParams.MATCH_PARENT,
+                            ViewGroup.LayoutParams.MATCH_PARENT
+                        )
+                        implementationMode = PreviewView.ImplementationMode.PERFORMANCE
+                        scaleType = PreviewView.ScaleType.FILL_CENTER
+                    }
+
+                    val cameraProviderFuture = ProcessCameraProvider.getInstance(ctx)
+                    cameraProviderFuture.addListener({
+                        val cameraProvider = cameraProviderFuture.get()
+
+                        val preview = Preview.Builder()
+                            .build()
+                            .also { it.surfaceProvider = previewView.surfaceProvider }
+
+                        @Suppress("DEPRECATION")
+                        val imageAnalysis = ImageAnalysis.Builder()
+                            .setTargetResolution(android.util.Size(640, 480))
+                            .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+                            .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_YUV_420_888)
+                            .build()
+                            .also {
+                                it.setAnalyzer(
+                                    Executors.newSingleThreadExecutor(),
+                                    frameProvider.createAnalyzer()
+                                )
+                            }
+
+                        val cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
+
+                        try {
+                            cameraProvider.unbindAll()
+                            cameraProvider.bindToLifecycle(
+                                lifecycleOwner,
+                                cameraSelector,
+                                preview,
+                                imageAnalysis
+                            )
+                        } catch (e: Exception) {
+                            android.util.Log.e("MainScreen", "Camera binding failed", e)
+                        }
+                    }, ContextCompat.getMainExecutor(ctx))
+
+                    previewView
+                }
+            )
+        }
 
         // Layer 2: Bounding Box Overlay
         BoundingBoxOverlay(

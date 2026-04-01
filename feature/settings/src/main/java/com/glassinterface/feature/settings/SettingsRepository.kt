@@ -44,8 +44,8 @@ class SettingsRepository @Inject constructor(
             sensitivity = prefs[KEY_SENSITIVITY] ?: 0.5f,
             mode = prefs[KEY_SCENE_MODE]?.let { SceneMode.valueOf(it) } ?: SceneMode.OUTDOOR,
             cooldownMs = prefs[KEY_COOLDOWN_MS] ?: 3000L,
-            serverUrl = prefs[KEY_SERVER_URL] ?: "http://192.168.4.1:81/stream",
-            useExternalCamera = prefs[KEY_USE_EXTERNAL_CAMERA] ?: false
+            serverUrl = prefs[KEY_SERVER_URL] ?: "ws://192.168.4.1/Camera",
+            useExternalCamera = prefs[KEY_USE_EXTERNAL_CAMERA] ?: true
         )
     }
 

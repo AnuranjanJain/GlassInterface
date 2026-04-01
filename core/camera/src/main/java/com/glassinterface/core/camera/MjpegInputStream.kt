@@ -36,6 +36,9 @@ class MjpegInputStream(inputStream: InputStream) : DataInputStream(BufferedInput
 
         try {
             contentLen = parseContentLength(header)
+            if (contentLen <= 0) {
+                contentLen = getEndOfSequence(this, EOF_MARKER)
+            }
         } catch (nfe: NumberFormatException) {
             contentLen = getEndOfSequence(this, EOF_MARKER)
         }
@@ -69,20 +72,21 @@ class MjpegInputStream(inputStream: InputStream) : DataInputStream(BufferedInput
 
     @Throws(IOException::class)
     private fun getEndOfSequence(inputStream: DataInputStream, sequence: ByteArray): Int {
-        var seqIndex = 0
-        var c: Byte
-        for (i in 0 until FRAME_MAX_LENGTH) {
-            c = inputStream.readByte()
-            if (c == sequence[seqIndex]) {
-                seqIndex++
-                if (seqIndex == sequence.size) {
-                    return i + 1
-                }
-            } else {
-                seqIndex = 0
-            }
+        val seqLen = sequence.size
+        val c = ByteArray(seqLen)
+        for (i in 0 until seqLen) {
+            c[i] = inputStream.readByte()
         }
-        return -1
+        var len = seqLen
+        while (!c.contentEquals(sequence)) {
+            for (i in 0 until seqLen - 1) {
+                c[i] = c[i + 1]
+            }
+            c[seqLen - 1] = inputStream.readByte()
+            len++
+            if (len >= FRAME_MAX_LENGTH) return -1
+        }
+        return len
     }
 
     @Throws(IOException::class, NumberFormatException::class)
@@ -90,7 +94,7 @@ class MjpegInputStream(inputStream: InputStream) : DataInputStream(BufferedInput
         val headerString = ByteArrayInputStream(headerBytes).bufferedReader().readText()
         val lines = headerString.split("\n", "\r\n")
         for (line in lines) {
-            if (line.startsWith(CONTENT_LENGTH)) {
+            if (line.startsWith(CONTENT_LENGTH, ignoreCase = true)) {
                 val parts = line.split(":")
                 if (parts.size == 2) {
                     return parts[1].trim().toInt()
