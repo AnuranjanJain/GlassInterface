@@ -2,6 +2,34 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.6.0] - 2026-04-05
+
+### Added
+- **Voice Assistant (`core:voice`)**: Push-to-talk voice input using Android `SpeechRecognizer`. 11 voice commands — "save face", "save this", "save contact", "save location", "save time", "save note", "what do you see", "who is this", "list memories", "help".
+- **Face Recognition (`FaceRecognitionEngine.kt`)**: On-device face detection via Google ML Kit with landmark-based embeddings for face re-identification. Runs in parallel with YOLOv8 object detection.
+- **Memory System (`core:memory`)**: Room SQLite database with 6 entity types — saved faces, saved objects, contacts, locations, timestamps, and free-form notes. Includes face embedding search via cosine similarity.
+- **Memory Browser (`feature:memory`)**: Tabbed Compose UI to view, browse, and delete all saved memories with thumbnails and timestamps.
+- **Mic FAB on MainScreen**: Floating action button with pulsing animation when listening, plus voice feedback banner for TTS responses.
+- **Scene Description**: Say "what do you see" and the assistant reads out all detected objects with distances and directions.
+- **GPS Location Saving**: "Save location" command stores current GPS coordinates with a custom label.
+- **Face Name Overlay**: Recognized face names now appear in bounding box labels on the camera overlay.
+
+### Changed
+- **MainViewModel**: Complete rewrite integrating voice command handling, face recognition pipeline, memory CRUD, and location services.
+- **MainActivity**: Now requests `RECORD_AUDIO` alongside `CAMERA` permission at startup.
+- **BoundingBoxOverlay**: Updated to display face name tags alongside object labels.
+
+### Dependencies
+- Added Room 2.6.1, ML Kit Face Detection 16.1.7, Play Services Location 21.3.0.
+
+### Performance
+- Bitmap pooling in `LocalAIEngine` to eliminate GC pressure during frame enhancement.
+- Pre-decode frame throttling (~8 FPS gate) in `CameraFrameProvider` to prevent inference saturation.
+- `RGB_565` bitmap decoding for 50% memory reduction per frame.
+- Per-label TTS cooldowns with priority-based scaling in `TTSManager`.
+
+---
+
 ## [0.5.0] - 2026-04-01
 
 ### Added
