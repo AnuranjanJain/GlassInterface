@@ -70,9 +70,10 @@ fun BoundingBoxOverlay(
                     setShadowLayer(2f, 1f, 1f, android.graphics.Color.BLACK)
                 }
 
-                // Line 1: Label + confidence + tracking ID
+                // Line 1: Label + confidence + tracking ID + face name
                 val idTag = if (box.trackingId != null) "#${box.trackingId} " else ""
-                val label = "$idTag${box.label} ${(box.confidence * 100).toInt()}%"
+                val faceTag = if (box.faceName != null) " [${box.faceName}]" else ""
+                val label = "$idTag${box.label} ${(box.confidence * 100).toInt()}%$faceTag"
                 drawText(label, left + 6f, top - labelHeight + 20f, labelPaint)
 
                 // Line 2: Distance + direction (if available from AI engine)

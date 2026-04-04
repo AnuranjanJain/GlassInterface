@@ -13,6 +13,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
 import androidx.core.content.ContextCompat
 import com.glassinterface.core.tts.TTSManager
+import com.glassinterface.core.voice.VoiceInputManager
 import com.glassinterface.ui.GlassNavHost
 import com.glassinterface.ui.theme.GlassInterfaceTheme
 import dagger.hilt.android.AndroidEntryPoint
@@ -24,13 +25,21 @@ class MainActivity : ComponentActivity() {
     @Inject
     lateinit var ttsManager: TTSManager
 
-    private val cameraPermissionLauncher = registerForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { isGranted ->
-        if (isGranted) {
+    @Inject
+    lateinit var voiceInputManager: VoiceInputManager
+
+    private val requiredPermissions = arrayOf(
+        Manifest.permission.CAMERA,
+        Manifest.permission.RECORD_AUDIO
+    )
+
+    private val permissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        val cameraGranted = permissions[Manifest.permission.CAMERA] ?: false
+        if (cameraGranted) {
             setupUI()
         } else {
-            // TODO: Show a rationale dialog explaining why camera is needed
             finish()
         }
     }
@@ -42,13 +51,15 @@ class MainActivity : ComponentActivity() {
         // Initialize TTS early
         ttsManager.initialize()
 
-        // Check camera permission
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA)
-            == PackageManager.PERMISSION_GRANTED
-        ) {
+        // Check permissions
+        val allGranted = requiredPermissions.all {
+            ContextCompat.checkSelfPermission(this, it) == PackageManager.PERMISSION_GRANTED
+        }
+
+        if (allGranted) {
             setupUI()
         } else {
-            cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+            permissionLauncher.launch(requiredPermissions)
         }
     }
 
@@ -68,5 +79,6 @@ class MainActivity : ComponentActivity() {
     override fun onDestroy() {
         super.onDestroy()
         ttsManager.shutdown()
+        voiceInputManager.destroy()
     }
 }

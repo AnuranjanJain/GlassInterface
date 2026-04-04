@@ -4,14 +4,16 @@ import androidx.compose.runtime.Composable
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import com.glassinterface.feature.memory.MemoryScreen
 import com.glassinterface.feature.settings.SettingsScreen
 
 /**
  * Top-level navigation host for GlassInterface.
  *
  * Routes:
- * - "main" → Camera + detection screen
+ * - "main" → Camera + detection + voice assistant screen
  * - "settings" → User preferences
+ * - "memory" → Saved faces, objects, contacts, locations, notes
  */
 @Composable
 fun GlassNavHost() {
@@ -20,12 +22,19 @@ fun GlassNavHost() {
     NavHost(navController = navController, startDestination = "main") {
         composable("main") {
             MainScreen(
-                onNavigateToSettings = { navController.navigate("settings") }
+                onNavigateToSettings = { navController.navigate("settings") },
+                onNavigateToMemory = { navController.navigate("memory") }
             )
         }
 
         composable("settings") {
             SettingsScreen(
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+
+        composable("memory") {
+            MemoryScreen(
                 onNavigateBack = { navController.popBackStack() }
             )
         }

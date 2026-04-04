@@ -60,7 +60,10 @@ dependencies {
     implementation(project(":core:ai-bridge"))
     implementation(project(":core:tts"))
     implementation(project(":core:overlay"))
+    implementation(project(":core:memory"))
+    implementation(project(":core:voice"))
     implementation(project(":feature:settings"))
+    implementation(project(":feature:memory"))
 
     // AndroidX Core
     implementation(libs.androidx.core.ktx)
@@ -103,4 +106,7 @@ dependencies {
     androidTestImplementation(libs.androidx.espresso.core)
 
     debugImplementation(libs.androidx.ui.tooling)
+
+    // Location
+    implementation(libs.play.services.location)
 }

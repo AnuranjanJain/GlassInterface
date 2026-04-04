@@ -41,7 +41,8 @@ data class BoundingBox(
     val velocity: Float = 0f,
     val approaching: Boolean = false,
     val riskScore: Float = 0f,
-    val trackingId: Int? = null
+    val trackingId: Int? = null,
+    val faceName: String? = null
 )
 
 /**

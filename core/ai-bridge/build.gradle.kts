@@ -42,6 +42,9 @@ dependencies {
     implementation(libs.tensorflow.lite.support)
     implementation(libs.tensorflow.lite.metadata)
 
+    // ML Kit Face Detection
+    implementation(libs.mlkit.face.detection)
+
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
 }

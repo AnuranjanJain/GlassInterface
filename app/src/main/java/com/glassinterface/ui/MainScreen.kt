@@ -6,23 +6,35 @@ import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.MicOff
+import androidx.compose.material.icons.filled.Memory
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -33,6 +45,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
@@ -47,11 +60,13 @@ import com.glassinterface.core.overlay.BoundingBoxOverlay
 import java.util.concurrent.Executors
 
 /**
- * Main camera screen with live preview, bounding box overlay, and control bar.
+ * Main camera screen with live preview, bounding box overlay,
+ * voice assistant mic button, and control bar.
  */
 @Composable
 fun MainScreen(
     onNavigateToSettings: () -> Unit,
+    onNavigateToMemory: () -> Unit = {},
     viewModel: MainViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -63,7 +78,7 @@ fun MainScreen(
         // Layer 1: Camera Preview
         if (uiState.alertConfig.useExternalCamera) {
             val currentBitmap by frameProvider.frames.collectAsStateWithLifecycle(initialValue = null)
-            
+
             if (currentBitmap != null) {
                 Image(
                     bitmap = currentBitmap!!.asImageBitmap(),
@@ -150,7 +165,6 @@ fun MainScreen(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // FPS Counter
             StatusChip(
                 text = "${uiState.fps} FPS",
                 color = when {
@@ -160,7 +174,6 @@ fun MainScreen(
                 }
             )
 
-            // Server processing time
             if (uiState.serverProcessingMs > 0) {
                 StatusChip(
                     text = "${uiState.serverProcessingMs.toInt()}ms",
@@ -168,7 +181,6 @@ fun MainScreen(
                 )
             }
 
-            // Mode indicator
             StatusChip(
                 text = uiState.alertConfig.mode.name,
                 color = MaterialTheme.colorScheme.primary
@@ -219,7 +231,78 @@ fun MainScreen(
             }
         }
 
-        // Layer 5: Bottom control bar
+        // Layer 5: Voice feedback banner
+        uiState.voiceFeedback?.let { feedback ->
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp)
+                    .padding(bottom = 120.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(Color(0xDD2196F3))
+                    .padding(12.dp)
+                    .align(Alignment.BottomCenter)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Filled.Mic,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Text(
+                        text = feedback,
+                        color = Color.White,
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.padding(start = 8.dp)
+                    )
+                }
+            }
+        }
+
+        // Layer 6: Mic FAB (voice assistant trigger)
+        Box(
+            modifier = Modifier
+                .align(Alignment.CenterEnd)
+                .padding(end = 16.dp)
+        ) {
+            val isListening = uiState.isListening
+
+            // Pulsing animation when listening
+            if (isListening) {
+                val infiniteTransition = rememberInfiniteTransition(label = "mic_pulse")
+                val scale by infiniteTransition.animateFloat(
+                    initialValue = 1f,
+                    targetValue = 1.4f,
+                    animationSpec = infiniteRepeatable(
+                        animation = tween(600),
+                        repeatMode = RepeatMode.Reverse
+                    ),
+                    label = "pulse_scale"
+                )
+                Box(
+                    modifier = Modifier
+                        .size(64.dp)
+                        .scale(scale)
+                        .clip(CircleShape)
+                        .background(Color(0x44FF1744))
+                )
+            }
+
+            FloatingActionButton(
+                onClick = { viewModel.toggleVoiceInput() },
+                containerColor = if (isListening) Color(0xFFFF1744) else Color(0xFF2196F3),
+                contentColor = Color.White,
+                modifier = Modifier.size(56.dp)
+            ) {
+                Icon(
+                    imageVector = if (isListening) Icons.Filled.MicOff else Icons.Filled.Mic,
+                    contentDescription = if (isListening) "Stop Listening" else "Start Voice Command"
+                )
+            }
+        }
+
+        // Layer 7: Bottom control bar
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -244,13 +327,23 @@ fun MainScreen(
                 )
             }
 
-            IconButton(onClick = onNavigateToSettings) {
-                Icon(
-                    imageVector = Icons.Filled.Settings,
-                    contentDescription = "Settings",
-                    tint = Color.White,
-                    modifier = Modifier.size(28.dp)
-                )
+            Row {
+                IconButton(onClick = onNavigateToMemory) {
+                    Icon(
+                        imageVector = Icons.Filled.Memory,
+                        contentDescription = "Memories",
+                        tint = Color.White,
+                        modifier = Modifier.size(28.dp)
+                    )
+                }
+                IconButton(onClick = onNavigateToSettings) {
+                    Icon(
+                        imageVector = Icons.Filled.Settings,
+                        contentDescription = "Settings",
+                        tint = Color.White,
+                        modifier = Modifier.size(28.dp)
+                    )
+                }
             }
         }
     }
