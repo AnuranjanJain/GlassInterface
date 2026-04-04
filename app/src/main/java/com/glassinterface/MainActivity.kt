@@ -12,11 +12,13 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.lifecycleScope
 import com.glassinterface.core.tts.TTSManager
 import com.glassinterface.core.voice.VoiceInputManager
 import com.glassinterface.ui.GlassNavHost
 import com.glassinterface.ui.theme.GlassInterfaceTheme
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @AndroidEntryPoint
@@ -44,12 +46,24 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    @Inject
+    lateinit var settingsRepository: com.glassinterface.feature.settings.SettingsRepository
+
+    private var headsetEnabled = true
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
         // Initialize TTS early
         ttsManager.initialize()
+
+        // Observe headset toggle
+        lifecycleScope.launch {
+            settingsRepository.alertConfig.collect { config ->
+                headsetEnabled = config.headsetOnClick
+            }
+        }
 
         // Check permissions
         val allGranted = requiredPermissions.all {
@@ -74,6 +88,23 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    override fun onKeyDown(keyCode: Int, event: android.view.KeyEvent?): Boolean {
+        if (headsetEnabled && (keyCode == android.view.KeyEvent.KEYCODE_HEADSETHOOK || 
+            keyCode == android.view.KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE)) {
+            
+            if (event?.repeatCount == 0) {
+                if (voiceInputManager.isListening.value) {
+                    voiceInputManager.stopListening()
+                } else {
+                    ttsManager.stop()
+                    voiceInputManager.startListening()
+                }
+            }
+            return true
+        }
+        return super.onKeyDown(keyCode, event)
     }
 
     override fun onDestroy() {

@@ -18,6 +18,7 @@ import com.glassinterface.core.memory.MemoryRepository
 import com.glassinterface.core.tts.TTSManager
 import com.glassinterface.core.voice.CommandType
 import com.glassinterface.core.voice.GeminiClient
+import com.glassinterface.core.voice.HandsFreeSensorManager
 import com.glassinterface.core.voice.VoiceCommand
 import com.glassinterface.core.voice.VoiceInputManager
 import com.glassinterface.feature.settings.SettingsRepository
@@ -66,7 +67,8 @@ class MainViewModel @Inject constructor(
     private val memoryRepository: MemoryRepository,
     val voiceInputManager: VoiceInputManager,
     private val locationClient: FusedLocationProviderClient,
-    private val geminiClient: GeminiClient
+    private val geminiClient: GeminiClient,
+    private val sensorManager: HandsFreeSensorManager
 ) : ViewModel() {
 
     companion object {
@@ -108,6 +110,17 @@ class MainViewModel @Inject constructor(
                     cameraFrameProvider.startExternalStream(config.serverUrl, viewModelScope)
                 } else {
                     cameraFrameProvider.stopExternalStream()
+                }
+
+                // Handle Hands-Free Sensors
+                if (config.shakeToWake || config.proximityWake) {
+                    sensorManager.startListening(
+                        enableShake = config.shakeToWake,
+                        enableProximity = config.proximityWake,
+                        onTriggerCallback = { toggleVoiceInput() }
+                    )
+                } else {
+                    sensorManager.stopListening()
                 }
             }
         }
@@ -464,5 +477,6 @@ class MainViewModel @Inject constructor(
         aiEngine.release()
         faceEngine.release()
         voiceInputManager.destroy()
+        sensorManager.stopListening()
     }
 }

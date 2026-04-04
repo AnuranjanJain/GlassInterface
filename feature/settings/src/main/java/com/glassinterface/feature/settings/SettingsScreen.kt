@@ -162,6 +162,77 @@ fun SettingsScreen(
                 modifier = Modifier.fillMaxWidth()
             )
 
+            // --- Hands-Free Accessibility ---
+            SectionHeader("Hands-Free Accessibility")
+
+            // Tap Anywhere
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Tap Anywhere to Talk",
+                    style = MaterialTheme.typography.bodyLarge
+                )
+                Switch(
+                    checked = config.tapAnywhere,
+                    onCheckedChange = { viewModel.onTapAnywhereChanged(it) }
+                )
+            }
+            Text("Tap anywhere on the screen to trigger the assistant", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+
+            // Bluetooth Button
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Bluetooth Button Trigger",
+                    style = MaterialTheme.typography.bodyLarge
+                )
+                Switch(
+                    checked = config.headsetOnClick,
+                    onCheckedChange = { viewModel.onHeadsetOnClickChanged(it) }
+                )
+            }
+            Text("Press Play/Pause on Bluetooth headset to talk", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+
+            // Shake to Wake
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Shake to Wake",
+                    style = MaterialTheme.typography.bodyLarge
+                )
+                Switch(
+                    checked = config.shakeToWake,
+                    onCheckedChange = { viewModel.onShakeToWakeChanged(it) }
+                )
+            }
+            Text("Shake the phone twice quickly to talk", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+
+            // Proximity Wake
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Proximity Wave",
+                    style = MaterialTheme.typography.bodyLarge
+                )
+                Switch(
+                    checked = config.proximityWake,
+                    onCheckedChange = { viewModel.onProximityWakeChanged(it) }
+                )
+            }
+            Text("Wave a hand closely over the top of the phone to talk", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+
             // --- Gemini API Key ---
             SectionHeader("🤖 Gemini AI Assistant")
 

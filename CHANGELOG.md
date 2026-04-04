@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.6.3] - 2026-04-05
+
+### Added
+- **True Hands-Free Accessibility**: Built specifically for visually impaired users. You can now activate the voice assistant without hunting for the microphone button on the screen.
+- **Shake-to-Wake**: Shake the phone twice rapidly to activate the microphone. (Enabled in Settings).
+- **Proximity Wave**: Wave your hand over the top of the phone to talk. (Enabled in Settings).
+- **Bluetooth Headset Hooks**: Intercepts the *Play/Pause* or *Call* button on Bluetooth earbuds to trigger the voice assistant.
+- **Tap Anywhere**: The entire screen acts as a giant microphone button.
+
+---
+
 ## [0.6.2] - 2026-04-05
 
 ### Added

@@ -14,6 +14,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -74,7 +75,14 @@ fun MainScreen(
     val lifecycleOwner = LocalLifecycleOwner.current
     val frameProvider = remember { viewModel.getCameraFrameProvider() }
 
-    Box(modifier = Modifier.fillMaxSize()) {
+    val baseModifier = Modifier.fillMaxSize()
+    val boxModifier = if (uiState.alertConfig.tapAnywhere) {
+        baseModifier.clickable { viewModel.toggleVoiceInput() }
+    } else {
+        baseModifier
+    }
+
+    Box(modifier = boxModifier) {
         // Layer 1: Camera Preview
         if (uiState.alertConfig.useExternalCamera) {
             val currentBitmap by frameProvider.frames.collectAsStateWithLifecycle(initialValue = null)

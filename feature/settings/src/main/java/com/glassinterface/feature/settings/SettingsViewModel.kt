@@ -66,4 +66,9 @@ class SettingsViewModel @Inject constructor(
             settingsRepository.updateGeminiApiKey(key)
         }
     }
+
+    fun onTapAnywhereChanged(enabled: Boolean) = viewModelScope.launch { settingsRepository.updateTapAnywhere(enabled) }
+    fun onShakeToWakeChanged(enabled: Boolean) = viewModelScope.launch { settingsRepository.updateShakeToWake(enabled) }
+    fun onProximityWakeChanged(enabled: Boolean) = viewModelScope.launch { settingsRepository.updateProximityWake(enabled) }
+    fun onHeadsetOnClickChanged(enabled: Boolean) = viewModelScope.launch { settingsRepository.updateHeadsetOnClick(enabled) }
 }

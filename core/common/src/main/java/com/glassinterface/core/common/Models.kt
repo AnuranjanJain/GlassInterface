@@ -71,7 +71,11 @@ data class AlertConfig(
     val mode: SceneMode = SceneMode.OUTDOOR,
     val cooldownMs: Long = 3000L,
     val serverUrl: String = "http://192.168.4.1:81/stream",
-    val useExternalCamera: Boolean = false
+    val useExternalCamera: Boolean = false,
+    val tapAnywhere: Boolean = true,
+    val shakeToWake: Boolean = false,
+    val proximityWake: Boolean = false,
+    val headsetOnClick: Boolean = true
 )
 
 /**

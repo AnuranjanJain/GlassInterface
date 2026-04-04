@@ -35,6 +35,12 @@ class SettingsRepository @Inject constructor(
         private val KEY_SERVER_URL = stringPreferencesKey("server_url")
         private val KEY_USE_EXTERNAL_CAMERA = booleanPreferencesKey("use_external_camera")
         private val KEY_GEMINI_API_KEY = stringPreferencesKey("gemini_api_key")
+        
+        // v0.6.3 Hands-Free toggles
+        private val KEY_TAP_ANYWHERE = booleanPreferencesKey("tap_anywhere")
+        private val KEY_SHAKE_TO_WAKE = booleanPreferencesKey("shake_to_wake")
+        private val KEY_PROXIMITY_WAKE = booleanPreferencesKey("proximity_wake")
+        private val KEY_HEADSET_ON_CLICK = booleanPreferencesKey("headset_on_click")
     }
 
     /**
@@ -46,7 +52,11 @@ class SettingsRepository @Inject constructor(
             mode = prefs[KEY_SCENE_MODE]?.let { SceneMode.valueOf(it) } ?: SceneMode.OUTDOOR,
             cooldownMs = prefs[KEY_COOLDOWN_MS] ?: 3000L,
             serverUrl = prefs[KEY_SERVER_URL] ?: "ws://192.168.4.1/Camera",
-            useExternalCamera = prefs[KEY_USE_EXTERNAL_CAMERA] ?: true
+            useExternalCamera = prefs[KEY_USE_EXTERNAL_CAMERA] ?: false,
+            tapAnywhere = prefs[KEY_TAP_ANYWHERE] ?: true,
+            shakeToWake = prefs[KEY_SHAKE_TO_WAKE] ?: false,
+            proximityWake = prefs[KEY_PROXIMITY_WAKE] ?: false,
+            headsetOnClick = prefs[KEY_HEADSET_ON_CLICK] ?: true
         )
     }
 
@@ -89,5 +99,21 @@ class SettingsRepository @Inject constructor(
         context.dataStore.edit { prefs ->
             prefs[KEY_GEMINI_API_KEY] = key.trim()
         }
+    }
+
+    suspend fun updateTapAnywhere(enabled: Boolean) {
+        context.dataStore.edit { prefs -> prefs[KEY_TAP_ANYWHERE] = enabled }
+    }
+
+    suspend fun updateShakeToWake(enabled: Boolean) {
+        context.dataStore.edit { prefs -> prefs[KEY_SHAKE_TO_WAKE] = enabled }
+    }
+
+    suspend fun updateProximityWake(enabled: Boolean) {
+        context.dataStore.edit { prefs -> prefs[KEY_PROXIMITY_WAKE] = enabled }
+    }
+
+    suspend fun updateHeadsetOnClick(enabled: Boolean) {
+        context.dataStore.edit { prefs -> prefs[KEY_HEADSET_ON_CLICK] = enabled }
     }
 }
