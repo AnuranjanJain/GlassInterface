@@ -128,9 +128,14 @@ class MainViewModel @Inject constructor(
                         )
                     }
 
-                    // Trigger TTS for the most urgent alert
+                    // Trigger TTS for the most urgent alert (priority + label routing)
                     topAlert?.let { alert ->
-                        ttsManager.speakAlert(alert.message, config.cooldownMs)
+                        ttsManager.speakAlert(
+                            message = alert.message,
+                            cooldownMs = config.cooldownMs,
+                            priority = alert.priority,
+                            label = alert.label
+                        )
                     }
                 } catch (e: Exception) {
                     android.util.Log.e("MainViewModel", "Inference error", e)

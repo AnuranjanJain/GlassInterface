@@ -81,6 +81,11 @@ class CameraFrameProvider @Inject constructor() {
         .readTimeout(0, java.util.concurrent.TimeUnit.MILLISECONDS)
         .build()
 
+    // Throttle external streams to ~8 fps so the AI engine is not overwhelmed
+    // by burst frames from the ESP32-CAM or similar low-power cameras.
+    private val framePeriodMs = 120L
+    private var lastExternalFrameMs = 0L
+
     fun startExternalStream(urlStr: String, scope: CoroutineScope) {
         android.util.Log.d("CameraFrameProvider", "Requested to start stream with URL: $urlStr")
         stopExternalStream()
@@ -111,10 +116,17 @@ class CameraFrameProvider @Inject constructor() {
 
             override fun onMessage(webSocket: WebSocket, bytes: ByteString) {
                 try {
+                    val now = System.currentTimeMillis()
+                    if (now - lastExternalFrameMs < framePeriodMs) return
+
                     android.util.Log.d("CameraFrameProvider", "Received binary frame: ${bytes.size} bytes")
                     val byteArray = bytes.toByteArray()
-                    val bitmap = android.graphics.BitmapFactory.decodeByteArray(byteArray, 0, byteArray.size)
+                    val options = android.graphics.BitmapFactory.Options().apply {
+                        inPreferredConfig = android.graphics.Bitmap.Config.RGB_565 // smaller memory
+                    }
+                    val bitmap = android.graphics.BitmapFactory.decodeByteArray(byteArray, 0, byteArray.size, options)
                     if (bitmap != null) {
+                        lastExternalFrameMs = now
                         framesRead++
                         _frames.tryEmit(bitmap)
                     } else {
@@ -127,11 +139,15 @@ class CameraFrameProvider @Inject constructor() {
 
             override fun onMessage(webSocket: WebSocket, text: String) {
                 try {
+                    val now = System.currentTimeMillis()
+                    if (now - lastExternalFrameMs < framePeriodMs) return
+
                     android.util.Log.d("CameraFrameProvider", "Received text frame: ${text.length} chars")
                     // If ESP32 sends JPEG as Base64 text string by mistake, decode it:
                     val byteArray = android.util.Base64.decode(text, android.util.Base64.DEFAULT)
                     val bitmap = android.graphics.BitmapFactory.decodeByteArray(byteArray, 0, byteArray.size)
                     if (bitmap != null) {
+                        lastExternalFrameMs = now
                         framesRead++
                         _frames.tryEmit(bitmap)
                     } else {
@@ -171,11 +187,16 @@ class CameraFrameProvider @Inject constructor() {
                         try {
                             val bitmap = mjpegStream.readMjpegFrame()
                             if (bitmap != null) {
+                                val now = System.currentTimeMillis()
                                 framesRead++
                                 if (framesRead % 30 == 0) {
                                     android.util.Log.d("CameraFrameProvider", "Successfully read $framesRead frames.")
                                 }
-                                _frames.tryEmit(bitmap)
+                                // Throttle: only pass frame to AI if enough time has elapsed
+                                if (now - lastExternalFrameMs >= framePeriodMs) {
+                                    lastExternalFrameMs = now
+                                    _frames.tryEmit(bitmap)
+                                }
                             } else {
                                 android.util.Log.w("CameraFrameProvider", "readMjpegFrame returned null bitmap")
                             }

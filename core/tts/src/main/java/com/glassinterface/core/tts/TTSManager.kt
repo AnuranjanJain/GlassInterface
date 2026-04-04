@@ -30,7 +30,12 @@ class TTSManager @Inject constructor(
 
     private var tts: TextToSpeech? = null
     private var isInitialized = false
-    private var lastAlertTimeMs = 0L
+
+    // Per-label last-spoken timestamps so one dominant object (e.g. "person")
+    // cannot starve other labels from being announced.
+    private val labelLastSpokenMs = mutableMapOf<String, Long>()
+    // Track the last spoken message to avoid repeating identical phrases
+    private var lastSpokenMessage: String = ""
 
     private val _isSpeaking = MutableStateFlow(false)
     /** Observable state for whether TTS is currently speaking. */
@@ -50,6 +55,7 @@ class TTSManager @Inject constructor(
                         Log.w(TAG, "TTS language not supported, falling back to default")
                     }
                     engine.setSpeechRate(1.1f) // Slightly faster for alerts
+                    engine.setPitch(1.0f)
                     engine.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
                         override fun onStart(utteranceId: String?) {
                             _isSpeaking.value = true
@@ -73,31 +79,72 @@ class TTSManager @Inject constructor(
     }
 
     /**
-     * Speak an alert message if the cooldown period has elapsed.
+     * Speak an alert message if the per-label cooldown has elapsed.
      *
-     * @param message The alert text to speak.
-     * @param cooldownMs Minimum time between alerts in milliseconds.
-     * @return true if the alert was spoken, false if it was suppressed by cooldown.
+     * Cooldown is scaled by priority:
+     *   CRITICAL  → uses [cooldownMs] as-is
+     *   WARNING   → 1.5× cooldown
+     *   INFO      → 2.5× cooldown
+     *
+     * If the exact same message was spoken last time, it won't repeat
+     * until 2× the effective cooldown has elapsed.
+     *
+     * @param message  The alert text to speak.
+     * @param cooldownMs Base cooldown in milliseconds.
+     * @param priority  "CRITICAL", "WARNING", or "INFO".
+     * @param label     The detected object label (e.g. "car").
+     * @return true if alert was spoken.
      */
     @Synchronized
-    fun speakAlert(message: String, cooldownMs: Long): Boolean {
+    fun speakAlert(
+        message: String,
+        cooldownMs: Long,
+        priority: String = "INFO",
+        label: String = ""
+    ): Boolean {
         if (!isInitialized) {
             Log.w(TAG, "TTS not initialized, skipping alert: $message")
             return false
         }
 
         val now = System.currentTimeMillis()
-        if (now - lastAlertTimeMs < cooldownMs) {
-            Log.d(TAG, "Alert suppressed by cooldown: $message")
+
+        // Priority-based cooldown multiplier
+        val multiplier = when (priority) {
+            "CRITICAL" -> 1.0f
+            "WARNING"  -> 1.5f
+            else       -> 2.5f
+        }
+        val effectiveCooldown = (cooldownMs * multiplier).toLong()
+
+        // Repeat suppression: if identical message, double the cooldown
+        val repeatMultiplier = if (message == lastSpokenMessage) 2L else 1L
+        val finalCooldown = effectiveCooldown * repeatMultiplier
+
+        val key = label.ifBlank { message }
+        val lastSpoken = labelLastSpokenMs[key] ?: 0L
+        if (now - lastSpoken < finalCooldown) {
+            Log.d(TAG, "[$priority/$label] suppressed by cooldown (${now - lastSpoken}ms < ${finalCooldown}ms)")
             return false
         }
 
-        lastAlertTimeMs = now
+        // Adjust speech rate live for CRITICAL urgency
+        tts?.setSpeechRate(if (priority == "CRITICAL") 1.25f else 1.05f)
+
+        labelLastSpokenMs[key] = now
+        lastSpokenMessage = message
         val utteranceId = UUID.randomUUID().toString()
         tts?.speak(message, TextToSpeech.QUEUE_FLUSH, null, utteranceId)
-        Log.i(TAG, "Speaking alert: $message")
+        Log.i(TAG, "[${priority}] Speaking: $message")
         return true
     }
+
+    /**
+     * Legacy single-argument overload for backward compatibility.
+     */
+    @Synchronized
+    fun speakAlert(message: String, cooldownMs: Long): Boolean =
+        speakAlert(message, cooldownMs, "INFO", "")
 
     /**
      * Stop any current speech immediately.

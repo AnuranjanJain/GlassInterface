@@ -2,6 +2,10 @@ package com.glassinterface.core.aibridge.engine
 
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.ColorMatrix
+import android.graphics.ColorMatrixColorFilter
+import android.graphics.Paint
 import android.graphics.RectF
 import android.util.Log
 import com.glassinterface.core.aibridge.AIEngine
@@ -15,8 +19,6 @@ import org.tensorflow.lite.support.image.ImageProcessor
 import org.tensorflow.lite.support.image.TensorImage
 import org.tensorflow.lite.support.image.ops.ResizeOp
 import org.tensorflow.lite.support.tensorbuffer.TensorBuffer
-import java.nio.ByteBuffer
-import java.nio.ByteOrder
 
 class LocalAIEngine(private val context: Context) : AIEngine {
 
@@ -24,7 +26,20 @@ class LocalAIEngine(private val context: Context) : AIEngine {
         private const val TAG = "LocalAIEngine"
         private const val MODEL_PATH = "yolov8s.tflite"
         private const val INPUT_SIZE = 640
-        private const val CONFIDENCE_THRESHOLD = 0.35f
+
+        // Global minimum — anything below this is always rejected
+        private const val CONFIDENCE_THRESHOLD = 0.42f
+
+        // Per-class stricter minimums to suppress noisy dominant classes.
+        // "person" is COCO class 0 and the most over-detected label at low
+        // quality; we raise its bar significantly.
+        private val CLASS_MIN_CONFIDENCE = mapOf(
+            "person"     to 0.58f,
+            "chair"      to 0.50f,
+            "potted plant" to 0.50f,
+            "bottle"     to 0.48f,
+            "cup"        to 0.48f
+        )
     }
 
     private var interpreter: Interpreter? = null
@@ -64,6 +79,11 @@ class LocalAIEngine(private val context: Context) : AIEngine {
             return DetectionResult(emptyList())
         }
 
+        // Enhance low-quality / ESP32-CAM frames before feeding the model.
+        // A contrast+brightness boost recovers detail lost in JPEG compression
+        // and helps YOLOv8 activate the correct class neurons on blurry input.
+        val enhancedFrame = enhanceFrame(frame)
+
         // 1. Preprocess using TensorImage
         val inputTensor = interpreter?.getInputTensor(0)
         val inputShape = inputTensor?.shape() ?: intArrayOf(1, INPUT_SIZE, INPUT_SIZE, 3)
@@ -75,7 +95,7 @@ class LocalAIEngine(private val context: Context) : AIEngine {
             .build()
         
         var tensorImage = TensorImage(inputDataType)
-        tensorImage.load(frame)
+        tensorImage.load(enhancedFrame)
         tensorImage = imageProcessor.process(tensorImage)
 
         // 2. Output Buffer Allocation
@@ -130,7 +150,9 @@ class LocalAIEngine(private val context: Context) : AIEngine {
                 }
             }
 
-            if (maxClassScore > CONFIDENCE_THRESHOLD && classIndex < labels.size) {
+            val label = if (classIndex >= 0 && classIndex < labels.size) labels[classIndex] else null
+            val effectiveThreshold = label?.let { CLASS_MIN_CONFIDENCE[it] } ?: CONFIDENCE_THRESHOLD
+            if (maxClassScore > effectiveThreshold && label != null) {
                 val cx = output[0 * numBoxes + i]
                 val cy = output[1 * numBoxes + i]
                 val w = output[2 * numBoxes + i]
@@ -150,7 +172,7 @@ class LocalAIEngine(private val context: Context) : AIEngine {
 
                 boxes.add(
                     BoundingBox(
-                        label = labels[classIndex],
+                        label = label,
                         confidence = maxClassScore,
                         rect = RectF(left, top, right, bottom)
                     )
@@ -193,5 +215,35 @@ class LocalAIEngine(private val context: Context) : AIEngine {
     override fun release() {
         interpreter?.close()
         interpreter = null
+    }
+
+    /**
+     * Applies a contrast + brightness boost useful for low-quality JPEG frames
+     * from devices like the ESP32-CAM (which produce washed-out, compressed images).
+     *
+     * Uses a ColorMatrix to perform the enhancement entirely on the GPU-side
+     * Canvas without allocating extra pixel byte arrays.
+     *
+     * contrast = 1.25  — punches up edges/textures
+     * brightness = +8  — compensates for underexposed streams
+     */
+    private fun enhanceFrame(src: Bitmap): Bitmap {
+        val contrast = 1.25f
+        val brightness = 8f
+        val output = Bitmap.createBitmap(src.width, src.height, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(output)
+        val paint = Paint().apply {
+            val translate = (-(255 * (contrast - 1)) / 2) + brightness
+            colorFilter = ColorMatrixColorFilter(
+                ColorMatrix(floatArrayOf(
+                    contrast, 0f, 0f, 0f, translate,
+                    0f, contrast, 0f, 0f, translate,
+                    0f, 0f, contrast, 0f, translate,
+                    0f, 0f, 0f, 1f, 0f
+                ))
+            )
+        }
+        canvas.drawBitmap(src, 0f, 0f, paint)
+        return output
     }
 }
