@@ -24,14 +24,14 @@ object VoiceCommandParser {
                 VoiceCommand(CommandType.REPEAT)
 
             // ── Face commands ──
-            lower.containsAny("save face", "save my face", "remember this person", "remember face", "save this face") ->
+            lower.containsAny("save face", "save my face", "remember this person", "remember face", "save this face", "save this person") ->
                 VoiceCommand(CommandType.SAVE_FACE, extractAfter(lower, "as", "named"))
 
             lower.containsAny("who is this", "who is that", "identify", "recognize") ->
                 VoiceCommand(CommandType.IDENTIFY_FACE)
 
             // ── Object commands ──
-            lower.containsAny("save this", "save object", "remember this object", "remember this", "save what i see") ->
+            lower.containsAny("save this", "save object", "remember this object", "remember this", "save what i see", "save it", "remember it", "what is this", "what's this") ->
                 VoiceCommand(CommandType.SAVE_OBJECT)
 
             // ── Contact commands ──
@@ -92,7 +92,16 @@ object VoiceCommandParser {
                 VoiceCommand(CommandType.ASK_GEMINI, lower)
 
             // ── Fallback: anything unrecognized → Gemini Q&A ──
-            else -> VoiceCommand(CommandType.ASK_GEMINI, lower)
+            else -> {
+                val tokens = lower.split("\\s+".toRegex())
+                val isQuestion = lower.containsAny("what", "where", "how", "who", "why", "is", "can", "do", "does", "are", "should", "will")
+                // Guard against spamming Gemini with tiny noises
+                if (tokens.size < 3 && !isQuestion) {
+                    VoiceCommand(CommandType.UNKNOWN, lower)
+                } else {
+                    VoiceCommand(CommandType.ASK_GEMINI, lower)
+                }
+            }
         }
     }
 

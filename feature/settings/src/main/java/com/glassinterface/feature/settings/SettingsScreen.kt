@@ -44,6 +44,7 @@ fun SettingsScreen(
 ) {
     val config by viewModel.alertConfig.collectAsStateWithLifecycle()
     var serverUrlInput by remember(config.serverUrl) { mutableStateOf(config.serverUrl) }
+    var showCommandsDialog by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -233,6 +234,15 @@ fun SettingsScreen(
             }
             Text("Wave a hand closely over the top of the phone to talk", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
 
+            // --- Voice Commands Guide ---
+            SectionHeader("Help & Commands")
+            androidx.compose.material3.OutlinedButton(
+                onClick = { showCommandsDialog = true },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("View Voice Commands Guide")
+            }
+
             // --- Gemini API Key ---
             SectionHeader("🤖 Gemini AI Assistant")
 
@@ -258,6 +268,34 @@ fun SettingsScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
         }
+    }
+
+    if (showCommandsDialog) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { showCommandsDialog = false },
+            title = { Text("Voice Commands Guide") },
+            text = {
+                Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                    Text("You can say the same command in multiple ways. Here are examples:\n\n" +
+                        "• Save Object: \"save this\", \"save object\", \"remember this\", \"save it\", \"what is this\"\n" +
+                        "• Find Object: \"where are my keys\", \"find my jacket\"\n" +
+                        "• Identify Scene: \"what do you see\", \"describe scene\", \"look around\"\n" +
+                        "• Save Face: \"save face\", \"remember this person\", \"save face as John\"\n" +
+                        "• Identify Face: \"who is this\", \"who is that\", \"recognize\"\n" +
+                        "• Save Note: \"save note [text]\", \"remember that [text]\"\n" +
+                        "• Battery: \"battery level\", \"how much battery\"\n" +
+                        "• Time & Date: \"what time is it\", \"what's the date\"\n" +
+                        "• Silence: \"stop\", \"be quiet\", \"silence\"\n" +
+                        "• Question: \"ask gemini [info]\" or simply ask directly (e.g. \"is it safe?\")"
+                    )
+                }
+            },
+            confirmButton = {
+                androidx.compose.material3.TextButton(onClick = { showCommandsDialog = false }) {
+                    Text("Close")
+                }
+            }
+        )
     }
 }
 

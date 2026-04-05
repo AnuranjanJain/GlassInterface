@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.6.6] - 2026-04-06
+
+### Fixed
+- **API 429 Spam Protection**: Fixed a logic flaw where brief ambient noises ("umm", "ah") under 3 words were being forwarded as unrecognized text directly to Google Gemini's servers, rapidly breaching the 15-RPM Free-Tier limit. Small non-question sounds now trigger a native "I didn't quite catch that" response rather than engaging the AI.
+- **Wake Word Precision Chopping**: Fixed a destructive bug where substring searches for the wake word "hi" were intercepting other words (e.g. "t**hi**s"), incorrectly splitting sentences in half. Upgraded wake word tracking to use strict lexical Token Regex Boundaries `\b(word)\b`.
+- **Lexical Aliasing Paths**: Corrected an alias mapping bug where "save this person" triggered Object Save instead of Face Save. 
+
+### Added
+- **Native Wake Word "Hey"**: Explicitly mapped `"hey"` and `"ok"` as valid wake words alongside "hey gi", drastically improving casual trigger rates on headsets.
+- **In-App Commands Menu**: Added a native `View Voice Commands Guide` overlay inside the Settings screen, providing explicit examples of conversational aliasing structures and capabilities natively to the user.
+
+---
+
 ## [0.6.5] - 2026-04-06
 
 ### Added

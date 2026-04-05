@@ -27,7 +27,7 @@ class VoiceInputManager @Inject constructor(
 ) {
     companion object {
         private const val TAG = "VoiceInputManager"
-        private val WAKE_WORDS = listOf("hey gi", "hi gi", "hey g", "hi g", "hey gee", "hi gee", "hi")
+        private val WAKE_WORDS_PATTERN = Regex("\\b(hey gi|hi gi|hey g|hi g|hey gee|hi gee|hi|hey|hello|ok)\\b", RegexOption.IGNORE_CASE)
     }
 
     private var recognizer: SpeechRecognizer? = null
@@ -170,13 +170,10 @@ class VoiceInputManager @Inject constructor(
 
             if (isContinuousMode) {
                 val lowerText = text.lowercase()
-                for (wakeWord in WAKE_WORDS) {
-                    if (lowerText.contains(wakeWord)) {
-                        wakeWordDetected = true
-                        val idx = lowerText.indexOf(wakeWord)
-                        commandText = text.substring(idx + wakeWord.length).trim()
-                        break
-                    }
+                val match = WAKE_WORDS_PATTERN.find(lowerText)
+                if (match != null) {
+                    wakeWordDetected = true
+                    commandText = text.substring(match.range.last + 1).trim()
                 }
 
                 if (wakeWordDetected) {
@@ -211,12 +208,10 @@ class VoiceInputManager @Inject constructor(
             if (isContinuousMode) {
                 val matches = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                 val text = matches?.firstOrNull()?.lowercase() ?: ""
-                for (wakeWord in WAKE_WORDS) {
-                    if (text.contains(wakeWord)) {
-                        Log.i(TAG, "Partial Wake word detected: $wakeWord")
-                        _lastCommand.value = VoiceCommand(com.glassinterface.core.voice.CommandType.UNKNOWN, "WAKE_WORD_ACK")
-                        break
-                    }
+                
+                if (WAKE_WORDS_PATTERN.containsMatchIn(text)) {
+                    Log.i(TAG, "Partial Wake word detected")
+                    _lastCommand.value = VoiceCommand(com.glassinterface.core.voice.CommandType.UNKNOWN, "WAKE_WORD_ACK")
                 }
             }
         }

@@ -185,8 +185,8 @@ class MainViewModel @Inject constructor(
                         isVoiceSessionActive = true
                         speak("I'm listening.")
                         return@launch
-                    } else {
-                        handleAskGemini(command.payload)
+                    } else if (command.payload.isNotBlank()) {
+                        speak("I didn't quite catch that. Try asking Gemini or use a specific command.")
                     }
                 }
             }
