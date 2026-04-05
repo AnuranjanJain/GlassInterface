@@ -27,9 +27,12 @@ class VoiceInputManager @Inject constructor(
 ) {
     companion object {
         private const val TAG = "VoiceInputManager"
+        private val WAKE_WORDS = listOf("hey gi", "hi gi", "hey g", "hi g", "hey gee", "hi gee", "hi")
     }
 
     private var recognizer: SpeechRecognizer? = null
+    var isContinuousMode = false
+
 
     private val _isListening = MutableStateFlow(false)
     val isListening: StateFlow<Boolean> = _isListening.asStateFlow()
@@ -50,9 +53,13 @@ class VoiceInputManager @Inject constructor(
      * Must be called from the main thread.
      */
     fun startListening() {
-        if (_isListening.value) {
-            Log.w(TAG, "Already listening, ignoring duplicate request")
-            return
+        if (isContinuousMode && recognizer != null) {
+            // Already initialized and might be listening, or we just restart it
+        } else {
+            if (_isListening.value) {
+                Log.w(TAG, "Already listening, ignoring duplicate request")
+                return
+            }
         }
 
         if (!SpeechRecognizer.isRecognitionAvailable(context)) {
@@ -70,7 +77,7 @@ class VoiceInputManager @Inject constructor(
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
             putExtra(RecognizerIntent.EXTRA_LANGUAGE, "en-US")
             putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
-            putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, false)
+            putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
         }
 
         _isListening.value = true
@@ -81,11 +88,23 @@ class VoiceInputManager @Inject constructor(
 
     fun stopListening() {
         recognizer?.stopListening()
+        isContinuousMode = false
         _isListening.value = false
         Log.i(TAG, "Stopped listening")
     }
 
+    fun startContinuousListening() {
+        isContinuousMode = true
+        startListening()
+    }
+
+    fun stopContinuousListening() {
+        isContinuousMode = false
+        stopListening()
+    }
+
     fun destroy() {
+        isContinuousMode = false
         recognizer?.destroy()
         recognizer = null
         _isListening.value = false
@@ -111,7 +130,9 @@ class VoiceInputManager @Inject constructor(
 
         override fun onEndOfSpeech() {
             Log.d(TAG, "Speech ended")
-            _isListening.value = false
+            if (!isContinuousMode) {
+                _isListening.value = false
+            }
         }
 
         override fun onError(error: Int) {
@@ -125,7 +146,17 @@ class VoiceInputManager @Inject constructor(
             }
             Log.e(TAG, errorMsg)
             _error.value = errorMsg
-            _isListening.value = false
+            
+            if (isContinuousMode) {
+                // Ignore silent timeouts in continuous mode and just restart
+                if (error == SpeechRecognizer.ERROR_SPEECH_TIMEOUT || error == SpeechRecognizer.ERROR_NO_MATCH || error == SpeechRecognizer.ERROR_CLIENT) {
+                    startListening()
+                } else {
+                    _isListening.value = false
+                }
+            } else {
+                _isListening.value = false
+            }
         }
 
         override fun onResults(results: Bundle?) {
@@ -133,12 +164,55 @@ class VoiceInputManager @Inject constructor(
             val text = matches?.firstOrNull() ?: ""
             Log.i(TAG, "Recognized: \"$text\"")
 
-            _lastResult.value = text
-            _lastCommand.value = VoiceCommandParser.parse(text)
-            _isListening.value = false
+            var commandText = text
+            var wakeWordDetected = false
+
+            if (isContinuousMode) {
+                val lowerText = text.lowercase()
+                for (wakeWord in WAKE_WORDS) {
+                    if (lowerText.contains(wakeWord)) {
+                        wakeWordDetected = true
+                        val idx = lowerText.indexOf(wakeWord)
+                        commandText = text.substring(idx + wakeWord.length).trim()
+                        break
+                    }
+                }
+
+                if (wakeWordDetected) {
+                    Log.i(TAG, "Wake word detected! Command: $commandText")
+                    _lastResult.value = commandText
+                    
+                    if (commandText.isNotEmpty()) {
+                        _lastCommand.value = VoiceCommandParser.parse(commandText)
+                    } else {
+                        // Just the wake word, send a special command to acknowledge
+                        _lastCommand.value = VoiceCommand(com.glassinterface.core.voice.CommandType.UNKNOWN, "WAKE_WORD_ACK")
+                    }
+                }
+                
+                // Restart listening for continuous mode
+                startListening()
+            } else {
+                _lastResult.value = text
+                _lastCommand.value = VoiceCommandParser.parse(text)
+                _isListening.value = false
+            }
         }
 
-        override fun onPartialResults(partialResults: Bundle?) {}
+        override fun onPartialResults(partialResults: Bundle?) {
+            if (isContinuousMode) {
+                val matches = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                val text = matches?.firstOrNull()?.lowercase() ?: ""
+                for (wakeWord in WAKE_WORDS) {
+                    if (text.contains(wakeWord)) {
+                        Log.i(TAG, "Partial Wake word detected: $wakeWord")
+                        _lastCommand.value = VoiceCommand(com.glassinterface.core.voice.CommandType.UNKNOWN, "WAKE_WORD_ACK")
+                        break
+                    }
+                }
+            }
+        }
+        
         override fun onEvent(eventType: Int, params: Bundle?) {}
     }
 }

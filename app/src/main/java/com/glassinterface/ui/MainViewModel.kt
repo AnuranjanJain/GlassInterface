@@ -88,11 +88,15 @@ class MainViewModel @Inject constructor(
     /** Last spoken response for REPEAT command. */
     private var lastSpokenText: String = ""
 
+    @Volatile
+    private var isVoiceSessionActive = false
+
     init {
         observeSettings()
         initializeAIEngine()
         startInferenceLoop()
         observeVoiceCommands()
+        voiceInputManager.startContinuousListening()
     }
 
     private fun initializeAIEngine() {
@@ -129,10 +133,11 @@ class MainViewModel @Inject constructor(
     // ── Voice Command Handling ────────────────────────────────────────
 
     fun toggleVoiceInput() {
-        if (voiceInputManager.isListening.value) {
+        if (voiceInputManager.isListening.value && !voiceInputManager.isContinuousMode) {
             voiceInputManager.stopListening()
         } else {
             ttsManager.stop()
+            isVoiceSessionActive = true
             voiceInputManager.startListening()
         }
     }
@@ -173,8 +178,18 @@ class MainViewModel @Inject constructor(
                 CommandType.READ_TEXT -> handleReadText()
                 CommandType.NAVIGATE -> handleNavigate(command.payload)
 
-                CommandType.UNKNOWN -> handleAskGemini(command.payload)
+                CommandType.UNKNOWN -> {
+                    if (command.payload == "WAKE_WORD_ACK") {
+                        ttsManager.stop()
+                        isVoiceSessionActive = true
+                        speak("I'm listening.")
+                        return@launch
+                    } else {
+                        handleAskGemini(command.payload)
+                    }
+                }
             }
+            isVoiceSessionActive = false
             voiceInputManager.consumeCommand()
         }
     }
@@ -443,7 +458,7 @@ class MainViewModel @Inject constructor(
                         )
                     }
 
-                    if (!voiceInputManager.isListening.value) {
+                    if (!isVoiceSessionActive && (!voiceInputManager.isListening.value || voiceInputManager.isContinuousMode)) {
                         topAlert?.let { alert ->
                             ttsManager.speakAlert(
                                 message = alert.message,

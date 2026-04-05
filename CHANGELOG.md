@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.6.4] - 2026-04-06
+
+### Added
+- **Always-On Wake Word**: Say "Hi" or "Hey Gi" anytime to activate the assistant without touching the device. Full hands-free voice continuous listening.
+
+---
+
 ## [0.6.3] - 2026-04-05
 
 ### Added
