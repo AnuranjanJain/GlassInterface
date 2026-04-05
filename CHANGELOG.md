@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.6.5] - 2026-04-06
+
+### Added
+- **Gemini Spatial Recall Integration**: Upgraded the `MemoryRepository` to natively supply raw text snapshots of your most recent Notes, Objects, and Locations to the Gemini AI API.
+- **Conversational Object Finding**: You can now ask questions like "Where did I put the keys?" or "Find my jacket." Unrecognized memory lookup queries are safely forwarded to Gemini which dynamically interprets your memory database to provide walking navigation advice toward the object.
+- **Graceful Capture Fallbacks**: Previously, if ML Kit couldn't isolate a bounding box or face when you explicitly tried to save one, the system would reject the command entirely. It now gracefully steps back to capturing a raw standard camera screenshot instead and logs it as standard scene context.
+- **Robust Location Fallbacks**: GPS requests failing in locations without satellite tracking no longer crash or exit—they gracefully save initialized zero-coordinate origin bookmarks with your desired label.
+
+---
+
 ## [0.6.4] - 2026-04-06
 
 ### Added

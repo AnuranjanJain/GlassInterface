@@ -138,6 +138,7 @@ class MainViewModel @Inject constructor(
         } else {
             ttsManager.stop()
             isVoiceSessionActive = true
+            voiceInputManager.isAwaitingCommand = true
             voiceInputManager.startListening()
         }
     }
@@ -304,9 +305,14 @@ class MainViewModel @Inject constructor(
         val frame = lastFrame
         if (frame == null) { speak("No camera frame available."); return }
         val faces = withContext(Dispatchers.Default) { faceEngine.detectFaces(frame) }
-        if (faces.isEmpty()) { speak("No face detected. Please look at the camera."); return }
-        val face = faces.first()
         val faceName = name.ifBlank { "Unknown" }
+        if (faces.isEmpty()) { 
+            val emptyEmbedding = FloatArray(128) { 0f }
+            memoryRepository.saveFace(faceName, emptyEmbedding, frame)
+            speak("No confident face detected, but saved the screenshot as $faceName.")
+            return 
+        }
+        val face = faces.first()
         val thumbnail = faceEngine.cropFace(frame, face.boundingBox)
         memoryRepository.saveFace(faceName, face.embedding, thumbnail)
         speak("Saved face as $faceName.")
@@ -314,10 +320,18 @@ class MainViewModel @Inject constructor(
 
     private suspend fun handleSaveObject() {
         val boxes = _uiState.value.boundingBoxes
-        if (boxes.isEmpty()) { speak("No objects detected to save."); return }
-        val topBox = boxes.maxByOrNull { it.confidence }!!
         val frame = lastFrame
-        val thumbnail = frame?.let { cropBox(it, topBox) }
+        if (boxes.isEmpty()) { 
+            if (frame != null) {
+                memoryRepository.saveObject("Unknown Scene", 0f, frame)
+                speak("No specific objects detected, but saved the scene screenshot.")
+            } else {
+                speak("No objects detected to save and no camera frame.")
+            }
+            return 
+        }
+        val topBox = boxes.maxByOrNull { it.confidence }!!
+        val thumbnail = frame?.let { cropBox(it, topBox) } ?: frame
         memoryRepository.saveObject(topBox.label, topBox.confidence, thumbnail)
         speak("Saved ${topBox.label} with ${(topBox.confidence * 100).toInt()}% confidence.")
     }
@@ -339,10 +353,23 @@ class MainViewModel @Inject constructor(
                         speak("Saved location $label.")
                     }
                 } else {
-                    viewModelScope.launch { speak("Could not get your location. Make sure GPS is enabled.") }
+                    viewModelScope.launch {
+                        memoryRepository.saveLocation(label, 0.0, 0.0)
+                        speak("Could not get exact GPS, but saved a bookmark for $label.") 
+                    }
+                }
+            }.addOnFailureListener {
+                viewModelScope.launch {
+                    memoryRepository.saveLocation(label, 0.0, 0.0)
+                    speak("Location error, but saved a bookmark for $label.") 
                 }
             }
-        } catch (e: Exception) { viewModelScope.launch { speak("Location error: ${e.message}") } }
+        } catch (e: Exception) { 
+            viewModelScope.launch { 
+                memoryRepository.saveLocation(label, 0.0, 0.0)
+                speak("Location error, but saved a bookmark for $label.") 
+            } 
+        }
     }
 
     private suspend fun handleSaveTimestamp(payload: String) {

@@ -115,6 +115,8 @@ class GeminiClient @Inject constructor() {
         sb.appendLine("You are GlassAssistant, a helpful AI assistant embedded in an assistive vision app for visually impaired users.")
         sb.appendLine("You answer concisely — keep responses under 3 sentences since they will be spoken aloud via TTS.")
         sb.appendLine("Be warm, clear, and practical. Avoid markdown formatting — plain text only.")
+        sb.appendLine("If the user asks 'where' they put an object or asks you to 'find' it, check their SAVED MEMORIES below.")
+        sb.appendLine("If you find the memory, explicitly tell them where it is, and then provide brief, safe walking directions/navigation advice to reach it as if you are navigating them to it.")
         sb.appendLine()
 
         if (sceneContext.isNotBlank()) {

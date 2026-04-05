@@ -33,6 +33,9 @@ interface MemoryDao {
     @Query("SELECT * FROM saved_objects ORDER BY createdAt DESC")
     fun getAllObjects(): Flow<List<SavedObjectEntity>>
 
+    @Query("SELECT * FROM saved_objects ORDER BY createdAt DESC LIMIT 15")
+    suspend fun getRecentObjectsSnapshot(): List<SavedObjectEntity>
+
     @Delete
     suspend fun deleteObject(obj: SavedObjectEntity)
 
@@ -53,6 +56,9 @@ interface MemoryDao {
     @Query("SELECT * FROM locations ORDER BY createdAt DESC")
     fun getAllLocations(): Flow<List<LocationEntity>>
 
+    @Query("SELECT * FROM locations ORDER BY createdAt DESC LIMIT 15")
+    suspend fun getRecentLocationsSnapshot(): List<LocationEntity>
+
     @Delete
     suspend fun deleteLocation(location: LocationEntity)
 
@@ -72,6 +78,9 @@ interface MemoryDao {
 
     @Query("SELECT * FROM notes ORDER BY createdAt DESC")
     fun getAllNotes(): Flow<List<NoteEntity>>
+
+    @Query("SELECT * FROM notes ORDER BY createdAt DESC LIMIT 15")
+    suspend fun getRecentNotesSnapshot(): List<NoteEntity>
 
     @Delete
     suspend fun deleteNote(note: NoteEntity)

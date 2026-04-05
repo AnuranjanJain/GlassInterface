@@ -32,6 +32,7 @@ class VoiceInputManager @Inject constructor(
 
     private var recognizer: SpeechRecognizer? = null
     var isContinuousMode = false
+    var isAwaitingCommand = false
 
 
     private val _isListening = MutableStateFlow(false)
@@ -184,10 +185,17 @@ class VoiceInputManager @Inject constructor(
                     
                     if (commandText.isNotEmpty()) {
                         _lastCommand.value = VoiceCommandParser.parse(commandText)
+                        isAwaitingCommand = false
                     } else {
                         // Just the wake word, send a special command to acknowledge
                         _lastCommand.value = VoiceCommand(com.glassinterface.core.voice.CommandType.UNKNOWN, "WAKE_WORD_ACK")
+                        isAwaitingCommand = true
                     }
+                } else if (isAwaitingCommand && text.isNotEmpty()) {
+                    Log.i(TAG, "Command received after wake word: $text")
+                    _lastResult.value = text
+                    _lastCommand.value = VoiceCommandParser.parse(text)
+                    isAwaitingCommand = false
                 }
                 
                 // Restart listening for continuous mode

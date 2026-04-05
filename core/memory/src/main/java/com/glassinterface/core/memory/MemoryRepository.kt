@@ -122,7 +122,17 @@ class MemoryRepository @Inject constructor(
         val contacts = dao.contactCount()
         val locations = dao.locationCount()
         val notes = dao.noteCount()
-        return "You have $faces saved faces, $objects saved objects, $contacts contacts, $locations locations, and $notes notes."
+        
+        val recentNotes = dao.getRecentNotesSnapshot().joinToString("; ") { it.content }
+        val recentObjects = dao.getRecentObjectsSnapshot().joinToString("; ") { it.label + (it.note?.let { n -> " ($n)" } ?: "") }
+        val recentLocations = dao.getRecentLocationsSnapshot().joinToString("; ") { it.label }
+        
+        return """
+            You have $faces saved faces, $objects saved objects, $contacts contacts, $locations locations, and $notes notes.
+            Recent Notes: $recentNotes
+            Recent Objects: $recentObjects
+            Recent Locations: $recentLocations
+        """.trimIndent()
     }
 
     // ── Helpers ──────────────────────────────────────────────────────
